@@ -59,18 +59,9 @@ void PollingRoutine(void)
 
 void UART_ParsePacket(UartBufferStruct *msg)
 {
-	int status = 0;
-	uint32_t packetSize = 0;
-
 	if(UART_RxMsgRdy(msg))
 	{
-		packetSize = msg->rx.packetSize;
-		if(status != 0)
-		{
-			return;
-		}
-
-		UART_TX_AddDataToBuffer(msg, msg->rx.msgToParse->data, packetSize);
+		UART_TX_AddDataToBuffer(msg, msg->rx.msgToParse->data, msg->rx.packetSize);
 	}
 }
 
