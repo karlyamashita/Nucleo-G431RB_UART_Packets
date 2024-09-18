@@ -38,7 +38,7 @@ void UART_AddByteToBuffer(UartBufferStruct *msg)
 
 /*
  * Description: This will check to be sure the packetSize has been reached.
- * 				It will then validate the checksum and copy to packet queue.
+ * 				It will then validate the checksum using -MOD256 and copy to packet queue.
  * 				This should be call from polling routine.
  */
 void UART_SortPacketBuffer(UartBufferStruct *msg)
@@ -47,7 +47,8 @@ void UART_SortPacketBuffer(UartBufferStruct *msg)
     uint8_t tempTelemetry[UART_RX_BYTE_BUFFER_SIZE] = {0};
 
 	uint32_t sortPtr = 0;
-	uint8_t checksum = 0;
+	uint16_t cal_checksum = 0;
+	uint16_t data_checksum = 0; // the checksum at end of packet
 
     if (msg->rx.bytePtr.cnt_Handle >= msg->rx.packetSize)
     {
@@ -66,35 +67,37 @@ void UART_SortPacketBuffer(UartBufferStruct *msg)
         // calculate checksum
         for(i = 0; i < (msg->rx.packetSize - 1); i++)
         {
-            checksum += tempTelemetry[i];
+        	cal_checksum += tempTelemetry[i];
         }
 
-        // verify checksum
-        if((checksum %256) != tempTelemetry[msg->rx.packetSize - 1]) // compare checksum to last index
+        data_checksum = tempTelemetry[msg->rx.packetSize - 1]; // get last byte, the checksum
+
+        if((uint8_t)(cal_checksum + data_checksum) != 0)
         {
         	RingBuff_Ptr_Output(&msg->rx.bytePtr, msg->rx.bytePtrSize ); // increment rx byte pointer
         	return; // no match so return
         }
 
-        if( ((checksum == 0) && (tempTelemetry[msg->rx.packetSize - 1] == 0)) || (tempTelemetry[0] == 0) ) // ignore packets that are all zeros or first byte is zero
-		{
-			for(i = 0; i < msg->rx.packetSize; i++)
+        if( ((cal_checksum == 0) && (tempTelemetry[msg->rx.packetSize - 1] == 0)) || (tempTelemetry[0] == 0) ) // ignore packets that are all zeros or first byte is zero
+        {
+        	for(i = 0; i < msg->rx.packetSize; i++)
 			{
 				RingBuff_Ptr_Output(&msg->rx.bytePtr, msg->rx.bytePtrSize ); // flush packet
 			}
-		}
-		else
-		{
+        }
+        else
+        {
 			// we have a checksum match so save the packet to the Rx queue buffer
 			for(i = 0; i < msg->rx.packetSize; i++)
 			{
-				msg->rx.queue[msg->rx.ptr.index_IN].data[i] = msg->rx.binaryBuffer[i];
-				RingBuff_Ptr_Output(&msg->rx.ptr, msg->rx.bytePtrSize );
+				//msg->rx.queue[msg->rx.ptr.index_IN].data[i] = msg->rx.binaryBuffer[i];
+				msg->rx.queue[msg->rx.ptr.index_IN].data[i] = tempTelemetry[i];
+				RingBuff_Ptr_Output(&msg->rx.ptr, msg->rx.queueSize);
 			}
 			msg->rx.queue[msg->rx.ptr.index_IN].size = msg->rx.packetSize;
 			RingBuff_Ptr_Input(&msg->rx.ptr, msg->rx.queueSize); // increment rx queue pointer
 			RingBuff_Ptr_Reset(&msg->rx.bytePtr);
-		}
+        }
     }
 }
 
